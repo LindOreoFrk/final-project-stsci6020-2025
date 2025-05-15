@@ -1,0 +1,275 @@
+---
+title: "Final project Analysis"
+author: "Xiaotong Fei"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+# Introduction
+
+Academic performance among high school students is influenced by many factors including personal, socioeconomic, and educational factors. This project explores how demographic characteristics and other school-related variables are associated with student achievement, specifically on math scores.
+
+The "Students Performance in Exams" dataset from Kaggle is analyzed to investigate the relationships between gender, ethnicity, parental education level, lunch type, test preparation course, and students' scores in math, reading, and writing.
+
+We focus on predicting students' **math score** as the primary outcome variable using linear regression model. The goal is to understand which factors have the strongest association with math performance and assess how well we can predict exam results using information on hand.
+
+
+# Methods
+This project will use a standard linear model. I begin with exploratory data analysis (EDA) to check the distributions of key variables, visualize relationships between predictors and the outcome, and identify any outliers as our first step.
+I then fit a multiple linear regression model using math score as the dependent variable and other variables in the dataset as predictors. Regression assumptions are assessed including linearity, normality, homoscedasticity, and multicollinearity.
+If any violations are found, appropriate transformations or modeling adjustments will be applied. I implement variable selection using AIC-based model comparison. Model performance is evaluated using $R^2$, adjusted $R^2$, and RMSE. Cross-validation is used to assess generalizability.
+I will include all codes in the analysis part and results interpretation in results section.
+Finally, we interpret the statistical significance of each predictor in discussion section and draw conclusions about their implications in the conclusion section.
+
+
+### Data Description
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(knitr)
+```
+
+The dataset contains exam scores and background information for 1,000 high school students. Each row represents one student and includes the following variables:
+
+- 'gender': student's gender (female or male)
+- 'race.ethnicity': demographic grouping from group A to E
+- 'parental.level.of.education': highest level of education completed by the student's parent(s).
+- 'lunch': type of lunh received (standard or free/reduced)
+- 'test.preparation.course': whether the student completed a prepaaration course
+- 'math.score': math exam score (0-100)
+- 'writing.score': writiing exam score (0-100)
+
+For this project, we focus on predicting **math score** as the outcome variable. The remaining variables serve as potential predictors. Some variables are categorical and will be converted to factors before modeling.
+
+First, we try to simply clean the data:
+```{r}
+students <- read.csv("StudentsPerformance.csv")
+
+names(students) <- make.names(names(students))
+
+names(students)
+
+# convert to factors
+students <- students %>%
+  mutate(
+    gender = as.factor(gender),
+    race.ethnicity = as.factor(race.ethnicity),
+    parental.level.of.education = as.factor(parental.level.of.education),
+    lunch = as.factor(lunch),
+    test.preparation.course = as.factor(test.preparation.course)
+  )
+```
+
+
+# Analysis
+```{r data-import}
+students <- read.csv("StudentsPerformance.csv")
+```
+
+### Exploratory Data Analysis
+
+We begin by examining the overall distribution of each variable and the relationships between predictors and the outcome (math score). The dataset includes both categorical and continuous variables. 
+
+```{r}
+summary(students)
+
+# check missing values
+colSums(is.na(students))
+
+```
+```{r}
+# histogram for checking math score distribution
+hist(students$math.score,
+     main = "Math Score Distribution",
+     xlab = "Math Score",
+     col = "lightblue",
+     breaks = 10)
+```
+```{r}
+# boxplot for math score based on genders
+boxplot(math.score ~ gender,
+        data = students,
+        main = "Math Score by Gender",
+        xlab = "Gender",
+        ylab = "Math Score",
+        col = c("lightpink", "lightblue"))
+```
+```{r}
+plot(students$reading.score, students$math.score,
+     main = "Math vs. Reading Score",
+     xlab = "Reading Score",
+     ylab = "Math Score",
+     pch = 19)
+```
+### Regression Analysis
+
+We fit a linear regression model to predict students' math scores based on several characteristics. The model includes categorical predictors such as gender, parental education, lunch type, and whether the student completed a test preparation course.
+
+Then, we use simple diagnostic plots to evaluate whether the assumptions of linear regression are met.
+
+```{r}
+# regression model
+model1 <- lm(math.score ~ gender + parental.level.of.education + lunch + test.preparation.course,
+             data = students)
+
+summary(model1)
+
+```
+```{r}
+# check linear regression assumptions
+par(mfrow = c(2, 2))
+plot(model1)
+```
+
+### variable selection
+```{r}
+drop1(model1, test = "F")
+```
+### Multicollinearity assessment
+```{r}
+library(car)
+
+vif(model1)
+```
+### Model performance evaluation
+```{r}
+predicted <- predict(model1)
+
+actual <- students$math.score
+
+residuals <- actual - predicted
+
+rmse <- sqrt(mean(residuals^2))
+
+mae <- mean(abs(residuals))
+
+summary(model1)
+
+```
+rmse = 13.4046773969
+mae = 10.8753294385
+adjusted $R^2$ = 0.2114
+
+### Cross-validation
+```{r}
+library(lattice)
+library(ggplot2)
+library(caret)
+
+cv_control <- trainControl(method = "cv", number = 10)
+
+#train model
+cv_model <- train(
+  math.score ~ gender + parental.level.of.education + lunch + test.preparation.course,
+  data = students,
+  method = "lm",
+  trControl = cv_control
+)
+
+# results
+cv_model
+```
+rmse = 13.47641
+mae = 10.95462
+Rsquared = 0.2094052
+
+# Results
+
+The histogram of math scores shows a bell-shaped distribution with a slight skew to the left. Most students scored between 50 and 80, with relatively fewer students at the extreme low or high ends of the scale. This suggests that while the scores are not perfectly normal, they are approximately symmetric enough to be suitable for linear modeling.
+
+The boxplot comparing math scores by gender shows that male students have higher median scores than female students. The spread of scores is also wider among male students. Some low-end outliers are visible in both groups, but especially among female students. This suggests that gender could be a potential predictor in math performance, which will be further examined in regression analysis.
+
+The scatterplot shows a strong positive linear relationship between math scores and reading scores. Students who perform well in reading tend to also perform well in math. This indicates that reading score could be a strong predictor for math performance if included in the model.
+
+### Regression Results
+
+We fit a multiple linear regression model to predict students' math scores based on demographic and academic factors. The model includes gender, parental level of education, lunch type, and whether the student completed a test preparation course.
+
+The overall model is statistically significant (F(8, 991) = 34.47, p < 2.2e-16), with an adjusted $R^2$ of 0.211, indicating that approximately 21% of the variation in math scores is explained by the predictors.
+
+Among the predictors:
+
+- **Gender**: Male students scored on average 5.1 points higher than female students (p < 0.001).
+- **Parental education**: Having a parent with only a high school diploma or less was associated with significantly lower math scores (e.g., −5.37 points for high school, p < 0.001; -4.87 for some high school, p < 0.001), compared to the reference group.
+- **Lunch**: Students with standard lunch scored 11.2 points higher than those on free/reduced lunch (p < 0.001).
+- **Test preparation**: Students who did **not** complete the test prep course scored 5.7 points lower (p < 0.001) than those who did.
+
+### Regression Diagnostics
+
+To evaluate whether the assumptions of linear regression are met, we examined the standard diagnostic plots for the fitted model.
+
+- **Linearity & Homoscedasticity**: The residuals vs. fitted plot shows that residuals are centered around zero without showing a strong curve, satisfying the linearity assumption. However, the spread of residuals is not completely uniform, suggesting mild heteroskedasticity.
+
+- **Normality**: The qq plot shows that the residuals are approximately normally distributed, though there is slight deviation in the tails. This is acceptable given the large sample size.
+
+- **Constant variance**: The scale-location plot does not show a major funneling pattern, probably suggesting that the variance of residuals is constant across fitted values.
+
+- **Outliers & Influence**: The residuals vs. leverage plot identifies a few points with slightly higher leverage, but no extreme outliers that strongly impact the model. 
+
+Combining all the plots together, I would say that the model meets the assumptions of linear regression well.
+
+### Variable Selection
+
+I used the `drop1()` function to evaluate the impact of removing each predictor from the model. Each predictor was tested using an F-test to see whether dropping it significantly reduced the model fit.
+
+The results show that all four predictors — gender, parental level of education, lunch type, and test preparation course — are statistically significant contributors to the model (all p-values < 0.001). Removing any of them would significantly increase the residual deviance and AIC.
+
+Therefore, all four predictors were kept in the final model.
+
+### Multicollinearity Check
+
+We used the Variance Inflation Factor (VIF) to assess multicollinearity among the predictors in the model. All VIF values were close to 1, including the generalized VIFs for categorical variables.
+
+This indicates that there is no multicollinearity that might cause concern between the predictors, and the model estimates are reliable.
+
+### Model Performance
+
+To assess the predictive performance of the model, we computed the Root Mean Squared Error (RMSE) and Mean Absolute Error (MAE). These values reflect the average prediction error in the same units as the outcome variable (math score).
+
+- **RMSE**: 13.40  
+- **MAE**: 10.88  
+- **Adjusted $R^2$ **: 0.2114 (from model summary)
+
+This suggests that the model's predictions deviate from the actual math scores by around 11 to 13 points on average. Given the simplicity of the model and the background nature of the predictors, I would say this level of accuracy is acceptable.
+
+### Cross-Validation
+
+Based on lecture recommendation, I applied 10-fold cross-validation using the `caret` package. 
+
+The average model performance across folds was:
+
+- **Cross-validated RMSE**: 13.48  
+- **Cross-validated MAE**: 10.95  
+- **Cross-validated R²**: 0.209  
+
+These results are consistent with the values from the full-sample model, indicating that the model generalizes well and does not present overfitting.
+
+
+# Discussion
+
+The regression analysis revealed that all four background predictors—gender, parental education level, lunch type, and test preparation course - were significantly associated with students' math performance.
+
+Among them, lunch type had the strongest effect: students receiving standard lunch scored on average 11 points higher than those on free/reduced lunch, suggesting a strong link between socioeconomic status and academic performance. Gender was also a significant factor, with male students scoring approximately 5 points higher than female students on average. Students who did not complete the test preparation course scored around 6 points lower, indicating the benefits of pre-course programs. Parental education had a modest but significant influence, especially at the lowest education levels.
+
+The model explained around 21% of the variance in math scores, which is modest but reasonable since only a small set of variables were included. The predictive performance is very consistent based on cross-validation.
+
+However, the model has limitations. It does not include key academic predictors like reading or writing scores, classroom factors, or psychological traits like motivation. Even though reading scores were not included in the regression model, EDA showed a strong positive correlation between reading and math scores, suggesting that reading score could be a highly effective predictor of math performance in a future predictive model. Finally, while the sample is large, it may not represent the broader population. 
+
+# Conclusion
+
+
+In this project, we used linear regression techniques to analyze the relationship between students' demographic and educational background factors and their math scores. The dataset was obtained from Kaggle and included 1,000 observations and variables such as gender, parental education, lunch type, and test preparation course.
+Our model showed that all four predictors significantly contributed to math performance. Lunch type and test preparation had the strongest effects, reflecting the impact of different levels of socioeconomic status and academic support. The model explained about 21% of the variance in math scores, and cross-validation confirmed its generalizability.
+This analysis demonstrates that even basic background characteristics can be meaningful when examining academic outcomes. In future work, the model could be improved by incorporating additional predictors such as reading or writing scores, classroom factors, or psychological variables like motivation and self-efficacy. More complex modeling approaches could also be used to find out nonlinear relationships.
+
+
+
+
+
